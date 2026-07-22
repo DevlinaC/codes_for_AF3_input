@@ -1,0 +1,36 @@
+# Python bytecode and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local environment variables
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*~
+
+# Generated AlphaFold 3 inputs and outputs
+input_files/
+output_files/
+predictions/
+results/
+2beg/
+
+# Generated files when processing predictions in the repository root
+processed_models.dat
+rank_*.pdb
+rank_*.cif
+seed-*_sample-*/
+ranking_scores.csv
+
