@@ -39,6 +39,14 @@ python modify_json.py input.json --single-seq --no-templates
 Processes ranked AlphaFold 3 predictions, saves each complete structure as PDB
 or CIF, and writes confidence values to `processed_models.dat`.
 
+Supports legacy AF3 filenames and newer filenames with job/model prefixes,
+such as `2LQ8_aligned_RfaH_ranking_scores.csv`. The input directory must contain
+a CSV ending in `ranking_scores.csv` and `seed-<seed>_sample-<sample>` model
+subdirectories. Within each model directory, the script finds files matching
+`*summary_confidences.json`, `*confidences.json` (excluding the summary file),
+and `*model.cif`. Keep one file of each type per directory so discovery is
+unambiguous. Missing or null `iptm` values are written as zero in the metadata.
+
 ```bash
 python process_AF3_preds.py --input-dir /path/to/predictions \
     --output-dir /path/to/results --output-format cif

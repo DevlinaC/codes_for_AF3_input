@@ -1,8 +1,11 @@
 """Process ranked AlphaFold 3 structure predictions.
 
-The input directory must be an AF3 prediction directory containing
-``ranking_scores.csv`` and the ``seed-*_sample-*`` model directories. Processed
-structures can be written as either PDB or CIF.
+The input directory must contain a CSV ending in ``ranking_scores.csv`` and
+``seed-*_sample-*`` model directories. Ranking CSV, confidence JSON, and model
+CIF files are discovered by filename patterns, supporting both legacy names
+and newer names with job/model prefixes. Each model directory must contain
+files ending in ``summary_confidences.json``, ``confidences.json``, and
+``model.cif``. Processed structures can be written as either PDB or CIF.
 
 Examples:
     python process_AF3_preds.py --input-dir /path/to/af3/run \\
@@ -58,7 +61,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--input-dir",
         type=Path,
         required=True,
-        help="AF3 prediction directory containing ranking_scores.csv",
+        help="AF3 prediction directory containing a CSV ending in ranking_scores.csv",
     )
     parser.add_argument(
         "-o",
@@ -127,11 +130,13 @@ def process_predictions(
 
     The function reads model rankings and confidence values from the AF3 output
     directory. It writes ranked structure files and a ``processed_models.dat``
-    metadata summary to the output directory.
+    metadata summary to the output directory. Filename patterns support legacy
+    and prefixed AF3 output names. Missing or null ``iptm`` values are reported
+    as zero.
 
     Args:
-        input_dir: AF3 directory containing ``ranking_scores.csv`` and model
-            subdirectories.
+        input_dir: AF3 directory containing a CSV ending in
+            ``ranking_scores.csv`` and ``seed-*_sample-*`` model subdirectories.
         output_dir: Directory where structures and metadata will be written.
         output_format: Structure format to write. Supported values are ``pdb``
             and ``cif``.
@@ -141,7 +146,9 @@ def process_predictions(
     print(f"Output directory: {output_dir}")
     print(f"Structure format: {output_format.upper()}")
 
-    ranking_score_file = input_dir / "ranking_scores.csv"
+    # Match both legacy ranking filenames and names with a job prefix.
+    ranking_score_filename = next(input_dir.glob("*ranking_scores*csv")).name
+    ranking_score_file = input_dir / ranking_score_filename
     outputinfofile = output_dir / "processed_models.dat"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -154,18 +161,25 @@ def process_predictions(
             score = str(round(float(row[2]), 2))
             modeldir = f"seed-{seed}_sample-{sample}"
 
-            summary_conf_file = input_dir / modeldir / "summary_confidences.json"
+            model_dir = input_dir / modeldir
+            # Match JSON filenames with or without a job/model prefix.
+            summary_conf_file = next(model_dir.glob("*summary_confidences.json"))
             conf_data = load_json(summary_conf_file)
             ptm = round(conf_data.get("ptm", 0), 3)
-            iptm = round(conf_data.get("iptm", 0), 3)
+            # AF3 can report an unavailable ipTM as JSON null.
+            iptm = round(conf_data.get("iptm") or 0, 3)
 
-            conf_file_path = input_dir / modeldir / "confidences.json"
+            # The broad confidence pattern also matches the summary; exclude it.
+            conf_file_path = next(
+                path for path in model_dir.glob("*confidences.json")
+                if not path.name.endswith("summary_confidences.json")
+            )
             conf_data = load_json(conf_file_path)
             plddt_scores = conf_data.get("atom_plddts", [])
             avg_plddt = round(statistics.mean(plddt_scores), 2) if plddt_scores else 0
 
             fout.write(f"rank {i}: seed {seed}, sample {sample}, score {score}, ptm {ptm}, iptm {iptm}, avg_plddt {avg_plddt}\n")
-            modelfilepath = input_dir / modeldir / "model.cif"
+            modelfilepath = next(model_dir.glob("*model.cif"))
             outputfilepath = output_dir / f"rank_{i}.{output_format}"
             save_structure(modelfilepath, outputfilepath, output_format)
 
@@ -175,9 +189,13 @@ def main() -> None:
     parser = create_parser()
     args = parser.parse_args()
     input_dir, output_dir = resolve_paths(args)
+
+    # check if the directory exists
     if not input_dir.is_dir():
         parser.error(f"input directory does not exist: {input_dir}")
-    if not (input_dir / "ranking_scores.csv").is_file():
+
+    # Accept either an unprefixed or prefixed ranking CSV.
+    if not next(input_dir.glob("*ranking_scores.csv"), None):
         parser.error(
             f"input directory does not contain ranking_scores.csv: {input_dir}"
         )
