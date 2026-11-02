@@ -26,6 +26,7 @@ output_files/
 predictions/
 results/
 2beg/
+2LQ*_aligned_RfaH/
 
 # Generated files when processing predictions in the repository root
 processed_models.dat
